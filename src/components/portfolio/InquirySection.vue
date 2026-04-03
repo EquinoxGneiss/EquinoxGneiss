@@ -7,6 +7,7 @@ const store = usePortfolioStore()
 const form = ref({ name: '', email: '', subject: '', message: '' })
 const submitting = ref(false)
 const submitted = ref(false)
+const submitError = ref('')
 const errors = ref({})
 
 function validate() {
@@ -24,12 +25,17 @@ function validate() {
 async function submitForm() {
   if (!validate()) return
   submitting.value = true
-  await new Promise((r) => setTimeout(r, 800))
-  store.addInquiry({ ...form.value })
-  form.value = { name: '', email: '', subject: '', message: '' }
-  submitting.value = false
-  submitted.value = true
-  setTimeout(() => (submitted.value = false), 6000)
+  submitError.value = ''
+  try {
+    await store.addInquiry({ ...form.value })
+    form.value = { name: '', email: '', subject: '', message: '' }
+    submitted.value = true
+    setTimeout(() => (submitted.value = false), 6000)
+  } catch (e) {
+    submitError.value = 'Failed to send message. Please try again.'
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -63,6 +69,11 @@ async function submitForm() {
           ✓ Message sent successfully! I'll get back to you soon.
         </div>
       </Transition>
+
+      <!-- Send error -->
+      <div v-if="submitError" class="mb-6 p-4 bg-red-950/60 border border-red-700/50 rounded-xl text-red-400 text-center text-sm">
+        {{ submitError }}
+      </div>
 
       <!-- Form -->
       <form @submit.prevent="submitForm" novalidate class="space-y-5">

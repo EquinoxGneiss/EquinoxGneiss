@@ -1,17 +1,19 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import LandingView from '@/views/LandingView.vue'
 import PortfolioView from '@/views/PortfolioView.vue'
 import AdminView from '@/views/AdminView.vue'
 import AuthCallbackView from '@/views/AuthCallbackView.vue'
 import SetPasswordView from '@/views/SetPasswordView.vue'
 import ForgotPasswordView from '@/views/ForgotPasswordView.vue'
+import NotFoundView from '@/views/NotFoundView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
-      name: 'portfolio',
-      component: PortfolioView,
+      name: 'landing',
+      component: LandingView,
     },
     {
       path: '/admin',
@@ -32,6 +34,18 @@ const router = createRouter({
       path: '/forgot-password',
       name: 'forgot-password',
       component: ForgotPasswordView,
+    },
+    // Dynamic portfolio — must come after all named static routes
+    {
+      path: '/:username',
+      name: 'portfolio',
+      component: PortfolioView,
+    },
+    // Catch-all 404
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: NotFoundView,
     },
   ],
   scrollBehavior(to, from, savedPosition) {

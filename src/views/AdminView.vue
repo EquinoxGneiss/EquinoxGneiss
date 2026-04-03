@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, markRaw, onMounted } from 'vue'
+import { ref, computed, markRaw, watch, onMounted } from 'vue'
 import { usePortfolioStore } from '@/stores/portfolio'
 import { useAuthStore } from '@/stores/auth'
 import LoginPanel from '@/components/admin/LoginPanel.vue'
@@ -13,7 +13,17 @@ import InquiriesPanel from '@/components/admin/InquiriesPanel.vue'
 const store = usePortfolioStore()
 const auth = useAuthStore()
 
-onMounted(() => auth.init())
+onMounted(async () => {
+  await auth.init()
+  // Auth is now resolved — fetch portfolio data for the signed-in user.
+  if (auth.user) store.fetchForOwner(auth.user.id)
+})
+
+// Also re-fetch when sign-in happens mid-session (e.g. from LoginPanel).
+watch(
+  () => auth.user,
+  (newUser) => { if (newUser) store.fetchForOwner(newUser.id) },
+)
 
 const activeTab = ref('overview')
 const sidebarOpen = ref(false)
@@ -149,7 +159,7 @@ function navigate(id) {
       <!-- Footer -->
       <div class="p-3 border-t border-gray-800 space-y-1">
         <a
-          href="/"
+          :href="auth.username ? `/${auth.username}` : '#'"
           target="_blank"
           rel="noopener noreferrer"
           class="w-full flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg text-sm transition-colors"
@@ -162,7 +172,10 @@ function navigate(id) {
               d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
             />
           </svg>
-          View Live Portfolio
+          <span class="flex-1 truncate">
+            <span v-if="auth.username" class="font-mono text-purple-400 text-xs">/{{ auth.username }}</span>
+            <span v-else>View Live Portfolio</span>
+          </span>
         </a>
         <button
           @click="auth.signOut()"
@@ -199,7 +212,7 @@ function navigate(id) {
         <div>
           <h2 class="font-semibold text-gray-900">{{ currentTab?.label }}</h2>
           <p class="text-xs text-gray-400 hidden sm:block">
-            Manage your portfolio — changes are saved automatically to your browser.
+            Manage your portfolio — changes are saved to the cloud.
           </p>
         </div>
 
