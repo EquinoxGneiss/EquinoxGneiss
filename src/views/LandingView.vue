@@ -9,7 +9,7 @@
     <div class="relative">
       <!-- Logo -->
       <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center mx-auto mb-6 shadow-xl shadow-purple-600/30">
-        <span class="text-3xl">⚡</span>
+        <span class="text-3xl">💼</span>
       </div>
 
       <h1 class="text-5xl font-extrabold text-white mb-3 tracking-tight">Folio</h1>
