@@ -115,3 +115,37 @@ create policy "Owner can update inquiry"
 
 create policy "Owner can delete inquiry"
   on public.inquiries for delete using (auth.uid() = portfolio_user_id);
+
+-- ─── Storage: avatars bucket ──────────────────────────────────────────────────
+-- Run in Supabase SQL editor. Creates a public bucket for profile photos.
+-- Also create the bucket manually in Supabase Dashboard →
+--   Storage → New Bucket → Name: "avatars" → Public: ON
+--
+-- Storage RLS policies:
+insert into storage.buckets (id, name, public)
+  values ('avatars', 'avatars', true)
+  on conflict (id) do nothing;
+
+create policy "Anyone can read avatars"
+  on storage.objects for select using (bucket_id = 'avatars');
+
+create policy "Owner can upload own avatar"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'avatars'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+create policy "Owner can update own avatar"
+  on storage.objects for update
+  using (
+    bucket_id = 'avatars'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+create policy "Owner can delete own avatar"
+  on storage.objects for delete
+  using (
+    bucket_id = 'avatars'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
