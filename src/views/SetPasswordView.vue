@@ -182,7 +182,7 @@ async function submit() {
               <div>
                 <label class="block text-sm font-medium text-gray-400 mb-1.5">Username</label>
                 <div class="relative">
-                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm select-none">yourdomain.com/</span>
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm select-none">folio-two-teal.vercel.app/</span>
                   <input
                     v-model="username"
                     @input="onUsernameInput"
