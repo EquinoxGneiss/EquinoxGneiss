@@ -320,20 +320,13 @@ export const usePortfolioStore = defineStore('portfolio', () => {
 
   // ── Inquiries ─────────────────────────────────────────
   async function addInquiry(item) {
-    const result = await withRetry(async () => {
-      const { data, error } = await withTimeout(() =>
+    await withRetry(async () => {
+      const { error } = await withTimeout(() =>
         supabase
           .from('inquiries')
           .insert({ ...item, portfolio_user_id: ownerId.value })
-          .select()
-          .single()
       )
       if (error) throw new Error(error.message)
-      return data
-    })
-    inquiries.value.unshift({
-      id: result.id, name: result.name, email: result.email,
-      subject: result.subject, message: result.message, read: result.read, date: result.created_at,
     })
   }
 
