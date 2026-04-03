@@ -5,16 +5,28 @@ import { usePortfolioStore } from '@/stores/portfolio'
 const store = usePortfolioStore()
 const form = ref({ ...store.social })
 const saved = ref(false)
+const saving = ref(false)
+const saveError = ref('')
 
 watch(
   () => store.social,
   (val) => { form.value = { ...val } }
 )
 
-function save() {
-  store.updateSocial({ ...form.value })
-  saved.value = true
-  setTimeout(() => (saved.value = false), 3000)
+async function save() {
+  saving.value = true
+  saveError.value = ''
+  try {
+    await store.updateSocial({ ...form.value })
+    saved.value = true
+    setTimeout(() => (saved.value = false), 3000)
+  } catch (e) {
+    saveError.value = e.message === 'timeout'
+      ? 'Database is waking up — please try again in a moment.'
+      : (e.message || 'Failed to save.')
+  } finally {
+    saving.value = false
+  }
 }
 </script>
 
@@ -78,9 +90,10 @@ function save() {
       <div class="flex items-center gap-3 pt-2">
         <button
           @click="save"
-          class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg transition-colors"
+          :disabled="saving"
+          class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors"
         >
-          Save Links
+          {{ saving ? 'Saving…' : 'Save Links' }}
         </button>
         <Transition
           enter-active-class="transition duration-200"
@@ -96,6 +109,7 @@ function save() {
             </svg>
             Saved!
           </span>
+          <span v-else-if="saveError" class="text-red-500 text-sm">{{ saveError }}</span>
         </Transition>
       </div>
     </div>

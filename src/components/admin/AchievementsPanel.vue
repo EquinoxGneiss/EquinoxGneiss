@@ -6,6 +6,7 @@ const store = usePortfolioStore()
 
 const showForm = ref(false)
 const editingId = ref(null)
+const saveError = ref('')
 
 function emptyForm() {
   return {
@@ -21,12 +22,14 @@ const form = ref(emptyForm())
 function openAdd() {
   editingId.value = null
   form.value = emptyForm()
+  saveError.value = ''
   showForm.value = true
 }
 
 function openEdit(item) {
   editingId.value = item.id
   form.value = { ...item }
+  saveError.value = ''
   showForm.value = true
 }
 
@@ -34,20 +37,33 @@ function cancel() {
   showForm.value = false
   editingId.value = null
   form.value = emptyForm()
+  saveError.value = ''
 }
 
-function save() {
+async function save() {
   if (!form.value.title.trim()) return
-  if (editingId.value) {
-    store.updateAchievement(editingId.value, form.value)
-  } else {
-    store.addAchievement(form.value)
+  saveError.value = ''
+  try {
+    if (editingId.value) {
+      await store.updateAchievement(editingId.value, form.value)
+    } else {
+      await store.addAchievement(form.value)
+    }
+    cancel()
+  } catch (e) {
+    saveError.value = e.message === 'timeout'
+      ? 'Database is waking up — please try again in a moment.'
+      : (e.message || 'Failed to save.')
   }
-  cancel()
 }
 
-function remove(id) {
-  if (confirm('Delete this achievement?')) store.deleteAchievement(id)
+async function remove(id) {
+  if (!confirm('Delete this achievement?')) return
+  try {
+    await store.deleteAchievement(id)
+  } catch (e) {
+    alert('Delete failed: ' + (e.message === 'timeout' ? 'Database is waking up — please try again.' : e.message))
+  }
 }
 </script>
 
@@ -129,7 +145,7 @@ function remove(id) {
           />
         </div>
 
-        <div class="flex gap-2">
+        <div class="flex items-center gap-3">
           <button
             @click="save"
             :disabled="!form.title.trim()"
@@ -143,6 +159,7 @@ function remove(id) {
           >
             Cancel
           </button>
+          <span v-if="saveError" class="text-red-500 text-sm">{{ saveError }}</span>
         </div>
       </div>
     </Transition>

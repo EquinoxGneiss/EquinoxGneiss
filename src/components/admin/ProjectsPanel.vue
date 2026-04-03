@@ -7,14 +7,15 @@ const store = usePortfolioStore()
 const showForm = ref(false)
 const editingId = ref(null)
 const techInput = ref('')
+const saveError = ref('')
 
 function emptyForm() {
   return {
     title: '',
     description: '',
     image: '',
-    liveUrl: '',
-    githubUrl: '',
+    live_url: '',
+    github_url: '',
     tech: [],
   }
 }
@@ -25,6 +26,7 @@ function openAdd() {
   editingId.value = null
   form.value = emptyForm()
   techInput.value = ''
+  saveError.value = ''
   showForm.value = true
 }
 
@@ -32,6 +34,7 @@ function openEdit(item) {
   editingId.value = item.id
   form.value = { ...item, tech: [...(item.tech || [])] }
   techInput.value = (item.tech || []).join(', ')
+  saveError.value = ''
   showForm.value = true
 }
 
@@ -40,26 +43,39 @@ function cancel() {
   editingId.value = null
   form.value = emptyForm()
   techInput.value = ''
+  saveError.value = ''
 }
 
-function save() {
+async function save() {
   if (!form.value.title.trim()) return
+  saveError.value = ''
   const tech = techInput.value
     .split(',')
     .map((t) => t.trim())
     .filter(Boolean)
   const data = { ...form.value, tech }
 
-  if (editingId.value) {
-    store.updateProject(editingId.value, data)
-  } else {
-    store.addProject(data)
+  try {
+    if (editingId.value) {
+      await store.updateProject(editingId.value, data)
+    } else {
+      await store.addProject(data)
+    }
+    cancel()
+  } catch (e) {
+    saveError.value = e.message === 'timeout'
+      ? 'Database is waking up — please try again in a moment.'
+      : (e.message || 'Failed to save.')
   }
-  cancel()
 }
 
-function remove(id) {
-  if (confirm('Delete this project?')) store.deleteProject(id)
+async function remove(id) {
+  if (!confirm('Delete this project?')) return
+  try {
+    await store.deleteProject(id)
+  } catch (e) {
+    alert('Delete failed: ' + (e.message === 'timeout' ? 'Database is waking up — please try again.' : e.message))
+  }
 }
 </script>
 
@@ -156,7 +172,7 @@ function remove(id) {
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Live Demo URL</label>
             <input
-              v-model="form.liveUrl"
+              v-model="form.live_url"
               type="url"
               placeholder="https://yourproject.com"
               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
@@ -165,7 +181,7 @@ function remove(id) {
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">GitHub URL</label>
             <input
-              v-model="form.githubUrl"
+              v-model="form.github_url"
               type="url"
               placeholder="https://github.com/you/repo"
               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
@@ -173,7 +189,7 @@ function remove(id) {
           </div>
         </div>
 
-        <div class="flex gap-2 pt-1">
+        <div class="flex items-center gap-3 pt-1">
           <button
             @click="save"
             :disabled="!form.title.trim()"
@@ -187,6 +203,7 @@ function remove(id) {
           >
             Cancel
           </button>
+          <span v-if="saveError" class="text-red-500 text-sm">{{ saveError }}</span>
         </div>
       </div>
     </Transition>
