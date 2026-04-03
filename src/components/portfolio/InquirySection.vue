@@ -24,12 +24,25 @@ function validate() {
   return Object.keys(errors.value).length === 0
 }
 
+// Strip null bytes and non-printable ASCII control characters (except newlines/tabs)
+// from a string. These cannot cause SQL injection via parameterized queries but
+// null bytes silently truncate strings in PostgreSQL and control chars are garbage.
+function sanitize(str) {
+  return (str ?? '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim()
+}
+
 async function submitForm() {
   if (!validate()) return
   submitting.value = true
   submitError.value = ''
+  const payload = {
+    name:    sanitize(form.value.name),
+    email:   sanitize(form.value.email),
+    subject: sanitize(form.value.subject),
+    message: sanitize(form.value.message),
+  }
   try {
-    await store.addInquiry({ ...form.value })
+    await store.addInquiry(payload)
     form.value = { name: '', email: '', subject: '', message: '' }
     submitted.value = true
     setTimeout(() => (submitted.value = false), 6000)
