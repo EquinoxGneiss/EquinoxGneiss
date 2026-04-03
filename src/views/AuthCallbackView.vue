@@ -43,6 +43,20 @@ onMounted(async () => {
     // First-time invite or password reset → force user to set a password
     router.replace('/set-password')
   } else {
+    // Magic-link sign-in: check if this is a new user (no profile row yet).
+    // New users need to pick a username and set a password before reaching /admin.
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (!profile) {
+        router.replace('/set-password')
+        return
+      }
+    }
     router.replace('/admin')
   }
 })
