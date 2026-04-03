@@ -10,13 +10,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
-// PKCE flow: Supabase sends a short-lived ?code= param instead of
-// exposing the raw access_token in the URL hash.
-// detectSessionInUrl:false — we handle the token manually in AuthCallbackView
-// so the client doesn't conflict with invite-style implicit tokens.
+// Implicit flow: Supabase sends #access_token=... in the URL hash.
+// PKCE would require the code verifier to be in the *same browser* that
+// initiated the request — this breaks when an email client opens the link
+// in a different browser ("invalid flow state" error).
+// signInWithPassword is unaffected by flowType.
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    flowType: 'pkce',
+    flowType: 'implicit',
     detectSessionInUrl: false,
   },
 })

@@ -11,14 +11,8 @@ onMounted(async () => {
   let err
   let tokenType = ''
 
-  if (search.includes('code=')) {
-    // PKCE flow
-    const result = await supabase.auth.exchangeCodeForSession(window.location.href)
-    err = result.error
-    // For PKCE, read type from query string
-    tokenType = new URLSearchParams(search).get('type') ?? ''
-  } else if (hash.includes('access_token=')) {
-    // Implicit flow (invite / magic-link emails)
+  if (hash.includes('access_token=')) {
+    // Implicit flow — token arrives in URL hash
     const params = new URLSearchParams(hash.replace(/^#/, ''))
     const access_token = params.get('access_token')
     const refresh_token = params.get('refresh_token')
@@ -30,6 +24,11 @@ onMounted(async () => {
       const result = await supabase.auth.setSession({ access_token, refresh_token })
       err = result.error
     }
+  } else if (search.includes('code=')) {
+    // PKCE fallback — handles any existing code-based links still in circulation
+    const result = await supabase.auth.exchangeCodeForSession(window.location.href)
+    err = result.error
+    tokenType = new URLSearchParams(search).get('type') ?? ''
   } else {
     err = { message: 'No authentication parameters found in URL.' }
   }
@@ -62,9 +61,11 @@ onMounted(async () => {
       <div v-else class="max-w-sm">
         <div class="text-5xl mb-4">⚠️</div>
         <h2 class="text-white font-semibold text-lg mb-2">Verification failed</h2>
-        <p class="text-red-400 text-sm mb-6">{{ error }}</p>
-        <p class="text-gray-600 text-xs mb-4">
-          The link may have expired. Ask for a new invite from the Supabase dashboard.
+        <p class="text-red-400 text-sm mb-3">{{ error }}</p>
+        <p class="text-gray-500 text-xs mb-6 leading-relaxed">
+          This usually happens when the link is opened in a different browser
+          than the one you used to request it. Try clicking the link again, or
+          request a new one.
         </p>
         <a
           href="/admin"
