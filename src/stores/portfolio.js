@@ -197,6 +197,19 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     return data.publicUrl
   }
 
+  // Upload any image to Supabase Storage under a sub-folder, return the public URL.
+  async function uploadImage(file, folder = 'achievements') {
+    if (!ownerId.value) throw new Error('Not ready yet — please wait a moment and try again.')
+    const ext = file.name.split('.').pop().toLowerCase()
+    const path = `${ownerId.value}/${folder}/${Date.now()}.${ext}`
+    const { error } = await supabase.storage
+      .from('avatars')
+      .upload(path, file, { upsert: false, contentType: file.type })
+    if (error) throw new Error(error.message)
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+    return data.publicUrl
+  }
+
   // ── Theme ─────────────────────────────────────────────
   async function updateTheme(name) {
     if (!ownerId.value) throw new Error('Not ready yet — please wait a moment and try again.')
@@ -366,6 +379,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     fetchByUsername,
     updateHero,
     uploadAvatar,
+    uploadImage,
     updateTheme,
     addAchievement,
     updateAchievement,

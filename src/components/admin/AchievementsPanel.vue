@@ -8,6 +8,14 @@ const showForm = ref(false)
 const editingId = ref(null)
 const saveError = ref('')
 
+// Upload state
+const imageMode = ref('url') // 'url' | 'upload'
+const uploading = ref(false)
+const uploadError = ref('')
+const uploadProgress = ref(0)
+const dragOver = ref(false)
+const fileInput = ref(null)
+
 function emptyForm() {
   return {
     title: '',
@@ -23,6 +31,8 @@ function openAdd() {
   editingId.value = null
   form.value = emptyForm()
   saveError.value = ''
+  imageMode.value = 'url'
+  uploadError.value = ''
   showForm.value = true
 }
 
@@ -30,6 +40,8 @@ function openEdit(item) {
   editingId.value = item.id
   form.value = { ...item }
   saveError.value = ''
+  imageMode.value = 'url'
+  uploadError.value = ''
   showForm.value = true
 }
 
@@ -38,6 +50,63 @@ function cancel() {
   editingId.value = null
   form.value = emptyForm()
   saveError.value = ''
+  imageMode.value = 'url'
+  uploadError.value = ''
+}
+
+// Resize image to max 800×800 via canvas before uploading
+function resizeImage(file, maxPx = 800) {
+  return new Promise((resolve) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height))
+      const w = Math.round(img.width * scale)
+      const h = Math.round(img.height * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      canvas.toBlob((blob) => resolve(new File([blob], file.name, { type: 'image/jpeg' })), 'image/jpeg', 0.88)
+    }
+    img.src = url
+  })
+}
+
+async function handleFile(file) {
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    uploadError.value = 'Please select an image file (JPG, PNG, WebP, GIF).'
+    return
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    uploadError.value = 'File must be under 10 MB.'
+    return
+  }
+  uploading.value = true
+  uploadError.value = ''
+  uploadProgress.value = 10
+  try {
+    const resized = await resizeImage(file)
+    uploadProgress.value = 40
+    const url = await store.uploadImage(resized, 'achievements')
+    uploadProgress.value = 90
+    form.value.image = url
+    uploadProgress.value = 100
+    setTimeout(() => { uploadProgress.value = 0 }, 800)
+  } catch (e) {
+    uploadError.value = e.message || 'Upload failed. Please try again.'
+    uploadProgress.value = 0
+  } finally {
+    uploading.value = false
+  }
+}
+
+function onFileInput(e) { handleFile(e.target.files[0]) }
+function onDrop(e) {
+  dragOver.value = false
+  handleFile(e.dataTransfer.files[0])
 }
 
 async function save() {
@@ -128,13 +197,84 @@ async function remove(id) {
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
-          <input
-            v-model="form.image"
-            type="url"
-            placeholder="https://example.com/achievement-photo.jpg"
-            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent"
-          />
+          <label class="block text-sm font-medium text-gray-700 mb-2">Achievement Image</label>
+
+          <!-- Mode tabs -->
+          <div class="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50 w-fit gap-0.5 mb-3">
+            <button
+              type="button"
+              @click="imageMode = 'upload'"
+              :class="imageMode === 'upload'
+                ? 'bg-white text-purple-700 shadow-sm font-semibold'
+                : 'text-gray-500 hover:text-gray-700'"
+              class="px-3 py-1.5 text-xs rounded-md transition-all"
+            >
+              Upload Image
+            </button>
+            <button
+              type="button"
+              @click="imageMode = 'url'"
+              :class="imageMode === 'url'
+                ? 'bg-white text-purple-700 shadow-sm font-semibold'
+                : 'text-gray-500 hover:text-gray-700'"
+              class="px-3 py-1.5 text-xs rounded-md transition-all"
+            >
+              Paste URL
+            </button>
+          </div>
+
+          <!-- Upload panel -->
+          <div v-if="imageMode === 'upload'">
+            <div
+              @dragover.prevent="dragOver = true"
+              @dragleave.prevent="dragOver = false"
+              @drop.prevent="onDrop"
+              @click="fileInput.click()"
+              :class="[
+                'relative border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-colors select-none',
+                dragOver ? 'border-purple-400 bg-purple-50' : 'border-gray-200 hover:border-purple-300 hover:bg-gray-50',
+                uploading ? 'pointer-events-none opacity-60' : '',
+              ]"
+            >
+              <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFileInput" />
+              <div v-if="uploading" class="flex flex-col items-center gap-2">
+                <svg class="w-6 h-6 animate-spin text-purple-500" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+                <span class="text-xs text-gray-500">Uploading…</span>
+                <div class="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden mt-1">
+                  <div
+                    class="h-full bg-purple-500 rounded-full transition-all duration-300"
+                    :style="{ width: uploadProgress + '%' }"
+                  ></div>
+                </div>
+              </div>
+              <div v-else class="flex flex-col items-center gap-1.5">
+                <svg class="w-7 h-7 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                    d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                </svg>
+                <p class="text-sm text-gray-600">
+                  <span class="text-purple-600 font-medium">Click to upload</span>
+                  <span class="text-gray-400"> or drag & drop</span>
+                </p>
+                <p class="text-xs text-gray-400">JPG, PNG, WebP, GIF · Max 10 MB · Auto-resized to 800 px</p>
+              </div>
+            </div>
+            <p v-if="uploadError" class="text-red-500 text-xs mt-1.5">{{ uploadError }}</p>
+          </div>
+
+          <!-- URL panel -->
+          <div v-else>
+            <input
+              v-model="form.image"
+              type="url"
+              placeholder="https://example.com/achievement-photo.jpg"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent"
+            />
+          </div>
+
           <!-- Preview -->
           <img
             v-if="form.image"
