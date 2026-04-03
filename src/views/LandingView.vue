@@ -188,7 +188,7 @@ async function submit() {
                 </div>
                 <h2 class="text-xl font-bold text-white">Get started</h2>
                 <p class="text-gray-500 text-sm mt-1.5 leading-relaxed">
-                  Enter your email and we'll send you a magic link.<br />No password required.
+                  Enter your email and we'll send you an invite.<br />
                 </p>
               </div>
 
