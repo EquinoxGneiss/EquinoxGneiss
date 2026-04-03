@@ -181,8 +181,15 @@ async function submit() {
             <div class="space-y-4">
               <div>
                 <label class="block text-sm font-medium text-gray-400 mb-1.5">Username</label>
-                <div class="relative">
-                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm select-none">folio-two-teal.vercel.app/</span>
+                <div
+                  class="flex items-center bg-gray-800 border rounded-xl overflow-hidden transition"
+                  :class="{
+                    'border-gray-700 focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/50': usernameStatus === 'idle' || usernameStatus === 'checking',
+                    'border-green-500': usernameStatus === 'available',
+                    'border-red-600': usernameStatus === 'taken' || usernameStatus === 'invalid',
+                  }"
+                >
+                  <span class="pl-3 text-gray-500 text-sm select-none whitespace-nowrap shrink-0">folio-two-teal.vercel.app/</span>
                   <input
                     v-model="username"
                     @input="onUsernameInput"
@@ -190,15 +197,10 @@ async function submit() {
                     placeholder="your-name"
                     autocomplete="username"
                     spellcheck="false"
-                    class="w-full bg-gray-800 border text-white rounded-xl pl-[8.5rem] pr-10 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition placeholder-gray-600"
-                    :class="{
-                      'border-gray-700 focus:border-purple-500': usernameStatus === 'idle' || usernameStatus === 'checking',
-                      'border-green-500': usernameStatus === 'available',
-                      'border-red-600': usernameStatus === 'taken' || usernameStatus === 'invalid',
-                    }"
+                    class="flex-1 min-w-0 bg-transparent text-white py-3 px-1.5 text-sm focus:outline-none placeholder-gray-600"
                   />
                   <!-- Status icon -->
-                  <div class="absolute right-3 top-1/2 -translate-y-1/2">
+                  <div class="pr-3 shrink-0">
                     <svg v-if="usernameStatus === 'checking'" class="w-4 h-4 animate-spin text-gray-500" fill="none" viewBox="0 0 24 24">
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
@@ -209,6 +211,7 @@ async function submit() {
                     <svg v-else-if="usernameStatus === 'taken' || usernameStatus === 'invalid'" class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
+                    <div v-else class="w-4 h-4"></div>
                   </div>
                 </div>
 
