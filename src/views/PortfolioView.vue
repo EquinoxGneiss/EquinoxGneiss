@@ -38,7 +38,7 @@ onMounted(() => store.fetchByUsername(route.params.username))
   </div>
 
   <!-- Portfolio -->
-  <div v-else class="bg-gray-950 min-h-screen">
+  <div v-else class="bg-gray-950 min-h-screen" :data-theme="store.theme || 'dark'">
     <NavBar />
     <HeroSection />
     <AchievementsSection />

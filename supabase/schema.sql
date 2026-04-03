@@ -29,8 +29,12 @@ create table if not exists public.portfolio_data (
   user_id     uuid not null unique references public.profiles(id) on delete cascade,
   hero        jsonb not null default '{}'::jsonb,
   social      jsonb not null default '{}'::jsonb,
+  theme       text not null default 'dark',
   updated_at  timestamptz not null default now()
 );
+
+-- Phase 2 migration (run separately if table already exists):
+-- ALTER TABLE public.portfolio_data ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'dark';
 
 alter table public.portfolio_data enable row level security;
 

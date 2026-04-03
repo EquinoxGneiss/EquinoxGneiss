@@ -32,7 +32,9 @@ async function save() {
     saved.value = true
     setTimeout(() => (saved.value = false), 3000)
   } catch (e) {
-    saveError.value = e.message
+    saveError.value = e.message === 'timeout'
+      ? 'Database is waking up — please try again in a moment.'
+      : (e.message || 'Failed to save.')
   } finally {
     saving.value = false
   }

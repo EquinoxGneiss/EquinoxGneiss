@@ -30,9 +30,7 @@ function scrollTo(id) {
   <nav
     :class="[
       'fixed top-0 left-0 right-0 z-50 transition-all duration-300',
-      scrolled
-        ? 'bg-gray-950/95 backdrop-blur-md shadow-xl shadow-black/30 border-b border-gray-800/60'
-        : 'bg-transparent',
+      scrolled ? 'tmct-nav backdrop-blur-md shadow-xl shadow-black/20 border-b' : 'bg-transparent',
     ]"
   >
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -40,7 +38,7 @@ function scrollTo(id) {
         <!-- Brand -->
         <button
           @click="scrollTo('hero')"
-          class="font-bold text-xl bg-gradient-to-r from-purple-400 to-indigo-400 bg-clip-text text-transparent"
+          class="tmct-nav-brand font-bold text-xl"
         >
           {{ store.hero.name || 'Portfolio' }}
         </button>
@@ -51,7 +49,7 @@ function scrollTo(id) {
             v-for="link in navLinks"
             :key="link.id"
             @click="scrollTo(link.id)"
-            class="text-gray-400 hover:text-purple-400 text-sm font-medium transition-colors duration-200"
+            class="tmct-nav-link text-sm font-medium transition-colors duration-200"
           >
             {{ link.label }}
           </button>
@@ -60,7 +58,7 @@ function scrollTo(id) {
         <!-- Mobile hamburger -->
         <button
           @click="menuOpen = !menuOpen"
-          class="md:hidden p-2 text-gray-400 hover:text-white transition-colors"
+          class="md:hidden p-2 tmct-nav-link transition-colors"
           aria-label="Toggle menu"
         >
           <svg v-if="!menuOpen" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -84,14 +82,14 @@ function scrollTo(id) {
     >
       <div
         v-if="menuOpen"
-        class="md:hidden bg-gray-950/98 backdrop-blur-md border-t border-gray-800"
+        class="md:hidden tmct-nav backdrop-blur-md border-t tmct-border"
       >
         <div class="px-4 py-4 space-y-1">
           <button
             v-for="link in navLinks"
             :key="link.id"
             @click="scrollTo(link.id)"
-            class="block w-full text-left px-3 py-2.5 text-gray-300 hover:text-purple-400 hover:bg-gray-900 rounded-lg text-sm transition-colors"
+            class="block w-full text-left px-3 py-2.5 tmct-nav-link rounded-lg text-sm transition-colors"
           >
             {{ link.label }}
           </button>
@@ -100,3 +98,4 @@ function scrollTo(id) {
     </Transition>
   </nav>
 </template>
+

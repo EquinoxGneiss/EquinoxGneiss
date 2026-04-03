@@ -51,7 +51,9 @@ async function save() {
     }
     cancel()
   } catch (e) {
-    saveError.value = e.message
+    saveError.value = e.message === 'timeout'
+      ? 'Database is waking up — please try again in a moment.'
+      : (e.message || 'Failed to save.')
   }
 }
 
@@ -60,7 +62,7 @@ async function remove(id) {
   try {
     await store.deleteAchievement(id)
   } catch (e) {
-    alert('Delete failed: ' + e.message)
+    alert('Delete failed: ' + (e.message === 'timeout' ? 'Database is waking up — please try again.' : e.message))
   }
 }
 </script>
