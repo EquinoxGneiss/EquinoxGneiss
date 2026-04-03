@@ -13,12 +13,14 @@ const errors = ref({})
 function validate() {
   errors.value = {}
   if (!form.value.name.trim()) errors.value.name = 'Name is required.'
+  else if (form.value.name.length > 100) errors.value.name = 'Name must be under 100 characters.'
   if (!form.value.email.trim()) {
     errors.value.email = 'Email is required.'
   } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.value.email)) {
     errors.value.email = 'Enter a valid email address.'
   }
   if (!form.value.message.trim()) errors.value.message = 'Message is required.'
+  else if (form.value.message.length > 5000) errors.value.message = 'Message must be under 5,000 characters.'
   return Object.keys(errors.value).length === 0
 }
 
@@ -82,6 +84,7 @@ async function submitForm() {
               v-model="form.name"
               type="text"
               placeholder="Your full name"
+              maxlength="100"
               class="tmct-input w-full border rounded-xl px-4 py-3 text-sm transition"
               :class="errors.name ? 'border-red-500' : ''"
             />
@@ -93,6 +96,7 @@ async function submitForm() {
               v-model="form.email"
               type="email"
               placeholder="you@example.com"
+              maxlength="254"
               class="tmct-input w-full border rounded-xl px-4 py-3 text-sm transition"
               :class="errors.email ? 'border-red-500' : ''"
             />
@@ -106,6 +110,7 @@ async function submitForm() {
             v-model="form.subject"
             type="text"
             placeholder="What's this about?"
+            maxlength="200"
             class="tmct-input w-full border rounded-xl px-4 py-3 text-sm transition"
           />
         </div>
@@ -116,6 +121,7 @@ async function submitForm() {
             v-model="form.message"
             rows="5"
             placeholder="Write your message here..."
+            maxlength="5000"
             class="tmct-input w-full border rounded-xl px-4 py-3 text-sm transition resize-none"
             :class="errors.message ? 'border-red-500' : ''"
           ></textarea>
