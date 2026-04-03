@@ -14,7 +14,7 @@
 
       <h1 class="text-5xl font-extrabold text-white mb-3 tracking-tight">Folio</h1>
       <p class="text-gray-400 text-lg mb-10 max-w-sm mx-auto leading-relaxed">
-        Your personal portfolio, powered by invite.<br />Build yours in minutes.
+        Your personal portfolio, powered by Vue.js.<br />Build yours in minutes.
       </p>
 
       <a
