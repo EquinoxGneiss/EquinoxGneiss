@@ -183,6 +183,20 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     await withRetry(() => savePortfolioData(ownerId.value, data, social.value, theme.value))
   }
 
+  // Upload avatar file to Supabase Storage, return the public URL.
+  // Replaces any previous avatar for this user (same path = auto-overwrite).
+  async function uploadAvatar(file) {
+    if (!ownerId.value) throw new Error('Not ready yet — please wait a moment and try again.')
+    const ext = file.name.split('.').pop().toLowerCase()
+    const path = `${ownerId.value}/avatar.${ext}`
+    const { error } = await supabase.storage
+      .from('avatars')
+      .upload(path, file, { upsert: true, contentType: file.type })
+    if (error) throw new Error(error.message)
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+    return data.publicUrl
+  }
+
   // ── Theme ─────────────────────────────────────────────
   async function updateTheme(name) {
     if (!ownerId.value) throw new Error('Not ready yet — please wait a moment and try again.')
@@ -306,20 +320,13 @@ export const usePortfolioStore = defineStore('portfolio', () => {
 
   // ── Inquiries ─────────────────────────────────────────
   async function addInquiry(item) {
-    const result = await withRetry(async () => {
-      const { data, error } = await withTimeout(() =>
+    await withRetry(async () => {
+      const { error } = await withTimeout(() =>
         supabase
           .from('inquiries')
           .insert({ ...item, portfolio_user_id: ownerId.value })
-          .select()
-          .single()
       )
       if (error) throw new Error(error.message)
-      return data
-    })
-    inquiries.value.unshift({
-      id: result.id, name: result.name, email: result.email,
-      subject: result.subject, message: result.message, read: result.read, date: result.created_at,
     })
   }
 
@@ -358,6 +365,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     fetchForOwner,
     fetchByUsername,
     updateHero,
+    uploadAvatar,
     updateTheme,
     addAchievement,
     updateAchievement,
