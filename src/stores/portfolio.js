@@ -2,11 +2,22 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { supabase } from '@/lib/supabase'
 
-// Refresh the Supabase session whenever the browser tab becomes visible again.
-// This prevents stale-connection failures after the user alt-tabs away for a while.
+// Track whether the tab was recently hidden.
+// Saves made shortly after returning from a background tab use a shorter timeout
+// so a stale connection fails fast and can be retried before the user gives up.
+let tabRecentlyHidden = false
+let _tabHiddenResetTimer = null
+
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
+    if (document.visibilityState === 'hidden') {
+      tabRecentlyHidden = true
+      clearTimeout(_tabHiddenResetTimer)
+    } else {
+      // Keep the short-timeout window for 60 s after returning
+      clearTimeout(_tabHiddenResetTimer)
+      _tabHiddenResetTimer = setTimeout(() => { tabRecentlyHidden = false }, 60000)
+      // Pre-warm connection / refresh auth token
       supabase.auth.getSession().catch(() => {})
     }
   })
@@ -27,9 +38,14 @@ const defaultSocial = {
 }
 
 // Calls `fn()` and rejects after `ms` ms. Factory-based so retries create fresh requests.
-// Also rejects immediately when the browser tab returns from hidden — this "wakes up"
-// any request that was frozen while backgrounded, so withRetry can refresh + retry it.
+// Uses a short 5-second effective timeout when the tab was recently hidden, so a stale
+// connection fails fast and withRetry can refresh + retry before the user gives up.
+// Also aborts immediately if the tab goes hidden → visible during the request itself.
 function withTimeout(fn, ms = 25000) {
+  // After a tab-switch Chrome can throttle timers; use a short timeout so we fail
+  // fast and hand off to withRetry rather than hanging for 25+ seconds.
+  const effectiveMs = tabRecentlyHidden ? Math.min(ms, 5000) : ms
+
   return new Promise((resolve, reject) => {
     let done = false
     let wasHidden = false
@@ -42,10 +58,10 @@ function withTimeout(fn, ms = 25000) {
       cb()
     }
 
-    const timer = setTimeout(() => finish(() => reject(new Error('timeout'))), ms)
+    const timer = setTimeout(() => finish(() => reject(new Error('timeout'))), effectiveMs)
 
-    // Track if the tab went hidden during this request.
-    // On return, immediately abort so withRetry can refresh the session and retry.
+    // If the tab goes hidden DURING this request then immediately abort on return
+    // so withRetry can refresh the session and start a fresh request.
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
         wasHidden = true
@@ -141,7 +157,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
       retrying.value = true
       // Refresh session before retrying — ensures token is valid after tab was hidden
       await supabase.auth.getSession().catch(() => {})
-      await new Promise(r => setTimeout(r, 2000))
+      await new Promise(r => setTimeout(r, 500))
       try {
         return await fn()
       } finally {
