@@ -27,12 +27,39 @@ const defaultSocial = {
 }
 
 // Calls `fn()` and rejects after `ms` ms. Factory-based so retries create fresh requests.
+// Also rejects immediately when the browser tab returns from hidden — this "wakes up"
+// any request that was frozen while backgrounded, so withRetry can refresh + retry it.
 function withTimeout(fn, ms = 25000) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('timeout')), ms)
+    let done = false
+    let wasHidden = false
+
+    const finish = (cb) => {
+      if (done) return; done = true
+      clearTimeout(timer)
+      if (typeof document !== 'undefined')
+        document.removeEventListener('visibilitychange', onVisibility)
+      cb()
+    }
+
+    const timer = setTimeout(() => finish(() => reject(new Error('timeout'))), ms)
+
+    // Track if the tab went hidden during this request.
+    // On return, immediately abort so withRetry can refresh the session and retry.
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        wasHidden = true
+      } else if (wasHidden) {
+        finish(() => reject(new Error('timeout')))
+      }
+    }
+
+    if (typeof document !== 'undefined')
+      document.addEventListener('visibilitychange', onVisibility)
+
     Promise.resolve(fn())
-      .then(v => { clearTimeout(timer); resolve(v) })
-      .catch(e => { clearTimeout(timer); reject(e) })
+      .then(v => finish(() => resolve(v)))
+      .catch(e => finish(() => reject(e)))
   })
 }
 
