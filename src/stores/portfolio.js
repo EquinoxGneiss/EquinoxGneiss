@@ -63,23 +63,51 @@ function withTimeout(fn, ms = 25000) {
   })
 }
 
+// Tracks whether portfolio_data row is known to exist for a userId.
+// Set after fetchForOwner so subsequent saves skip the redundant SELECT.
+const pdRowExists = new Map()
+
 // Select-then-insert-or-update avoids the upsert RLS deadlock on Supabase free tier.
+// Uses cached existence check so normal saves only need 1 round trip (UPDATE), not 2.
 async function savePortfolioData(userId, hero, social, theme, professionVal) {
+  const payload = { hero, social, theme }
+  if (professionVal !== undefined) payload.profession = professionVal
+
+  const knownExists = pdRowExists.get(userId)
+
+  if (knownExists === true) {
+    const { error } = await withTimeout(() =>
+      supabase.from('portfolio_data').update(payload).eq('user_id', userId)
+    )
+    if (error) throw new Error(error.message)
+    return
+  }
+
+  if (knownExists === false) {
+    const { error } = await withTimeout(() =>
+      supabase.from('portfolio_data').insert({ user_id: userId, ...payload })
+    )
+    if (error) throw new Error(error.message)
+    pdRowExists.set(userId, true)
+    return
+  }
+
+  // Existence unknown (save triggered before initial load finished) — check once
   const { data: existing } = await withTimeout(() =>
     supabase.from('portfolio_data').select('id').eq('user_id', userId).maybeSingle()
   )
-  const payload = { hero, social, theme }
-  if (professionVal !== undefined) payload.profession = professionVal
   if (existing) {
     const { error } = await withTimeout(() =>
       supabase.from('portfolio_data').update(payload).eq('user_id', userId)
     )
     if (error) throw new Error(error.message)
+    pdRowExists.set(userId, true)
   } else {
     const { error } = await withTimeout(() =>
       supabase.from('portfolio_data').insert({ user_id: userId, ...payload })
     )
     if (error) throw new Error(error.message)
+    pdRowExists.set(userId, true)
   }
 }
 
@@ -141,6 +169,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
         .order('created_at', { ascending: false }),
     ])
 
+    pdRowExists.set(userId, !!pdRes.data)
     hero.value = pdRes.data?.hero ?? { ...defaultHero }
     social.value = pdRes.data?.social ?? { ...defaultSocial }
     theme.value = pdRes.data?.theme ?? 'dark'
@@ -268,6 +297,14 @@ export const usePortfolioStore = defineStore('portfolio', () => {
   async function updateProfession(name) {
     if (!ownerId.value) throw new Error('Not ready yet — please wait a moment and try again.')
     profession.value = name
+    const knownExists = pdRowExists.get(ownerId.value)
+    if (knownExists === true) {
+      const { error } = await withTimeout(() =>
+        supabase.from('portfolio_data').update({ profession: name }).eq('user_id', ownerId.value)
+      )
+      if (error) throw new Error(error.message)
+      return
+    }
     const { data: existing } = await withTimeout(() =>
       supabase.from('portfolio_data').select('id').eq('user_id', ownerId.value).maybeSingle()
     )
@@ -276,6 +313,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
         supabase.from('portfolio_data').update({ profession: name }).eq('user_id', ownerId.value)
       )
       if (error) throw new Error(error.message)
+      pdRowExists.set(ownerId.value, true)
     } else {
       const { error } = await withTimeout(() =>
         supabase.from('portfolio_data').insert({
@@ -284,6 +322,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
         })
       )
       if (error) throw new Error(error.message)
+      pdRowExists.set(ownerId.value, true)
     }
   }
 
@@ -292,6 +331,13 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     if (!ownerId.value) throw new Error('Not ready yet — please wait a moment and try again.')
     theme.value = name
     await withRetry(async () => {
+      if (pdRowExists.get(ownerId.value) === true) {
+        const { error } = await withTimeout(() =>
+          supabase.from('portfolio_data').update({ theme: name }).eq('user_id', ownerId.value)
+        )
+        if (error) throw new Error(error.message)
+        return
+      }
       const { data: existing } = await withTimeout(() =>
         supabase.from('portfolio_data').select('id').eq('user_id', ownerId.value).maybeSingle()
       )
@@ -300,11 +346,13 @@ export const usePortfolioStore = defineStore('portfolio', () => {
           supabase.from('portfolio_data').update({ theme: name }).eq('user_id', ownerId.value)
         )
         if (error) throw new Error(error.message)
+        pdRowExists.set(ownerId.value, true)
       } else {
         const { error } = await withTimeout(() =>
           supabase.from('portfolio_data').insert({ user_id: ownerId.value, hero: hero.value, social: social.value, theme: name })
         )
         if (error) throw new Error(error.message)
+        pdRowExists.set(ownerId.value, true)
       }
     })
   }
