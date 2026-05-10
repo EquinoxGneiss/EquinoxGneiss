@@ -106,8 +106,8 @@ async function save() {
     }
     cancel()
   } catch (e) {
-    saveError.value = e.message === 'timeout'
-      ? 'Database is waking up — please try again in a moment.'
+    saveError.value = e.message === 'timeout' || e.message === 'Failed to fetch'
+      ? 'Connection lost — please try again in a moment.'
       : (e.message || 'Failed to save.')
   }
 }
@@ -117,7 +117,7 @@ async function remove(id) {
   try {
     await store.deleteProject(id)
   } catch (e) {
-    alert('Delete failed: ' + (e.message === 'timeout' ? 'Database is waking up — please try again.' : e.message))
+    alert('Delete failed: ' + (e.message === 'timeout' || e.message === 'Failed to fetch' ? 'Connection lost — please try again.' : e.message))
   }
 }
 

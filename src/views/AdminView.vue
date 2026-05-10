@@ -282,7 +282,7 @@ function navigate(id) {
         </div>
       </header>
 
-      <!-- DB cold-start retry banner (shown across all tabs) -->
+      <!-- Retry banner (shown across all tabs — covers cold-start and stale-connection) -->
       <div
         v-if="store.retrying"
         class="shrink-0 bg-amber-50 border-b border-amber-200 px-5 py-2.5 flex items-center gap-2 text-amber-700 text-sm"
@@ -291,7 +291,7 @@ function navigate(id) {
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
         </svg>
-        Database is waking up — retrying automatically...
+        Reconnecting — retrying automatically...
       </div>
 
       <!-- Panel content -->

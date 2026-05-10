@@ -49,8 +49,8 @@ async function selectTheme(id) {
     savedId.value = id
     setTimeout(() => (savedId.value = null), 2500)
   } catch (e) {
-    saveError.value = e.message === 'timeout'
-      ? 'Database is still waking up. Please try again in a few seconds.'
+    saveError.value = e.message === 'timeout' || e.message === 'Failed to fetch'
+      ? 'Connection lost — please try again in a moment.'
       : (e.message || 'Failed to save theme.')
   } finally {
     saving.value = false
@@ -78,7 +78,7 @@ async function selectTheme(id) {
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
       </svg>
-      Database is waking up — retrying automatically...
+      Reconnecting — retrying automatically...
     </div>
 
     <!-- Theme grid -->
