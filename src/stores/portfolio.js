@@ -2,6 +2,16 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { supabase } from '@/lib/supabase'
 
+// Refresh the Supabase session whenever the browser tab becomes visible again.
+// This prevents stale-connection failures after the user alt-tabs away for a while.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      supabase.auth.getSession().catch(() => {})
+    }
+  })
+}
+
 const defaultHero = {
   name: 'Your Name',
   title: 'Creative Developer & Designer',
@@ -59,14 +69,24 @@ export const usePortfolioStore = defineStore('portfolio', () => {
   const ownerId = ref(null)
   const retrying = ref(false)
 
-  // On timeout, waits 3 s then retries once; sets retrying so UI can show a banner.
+  // On timeout OR network error, waits 2 s then retries once.
+  // Also sets `retrying` so the UI can show a banner.
   async function withRetry(fn) {
     try {
       return await fn()
     } catch (e) {
-      if (e.message !== 'timeout') throw e
+      // Retry on cold-start timeouts AND stale-connection fetch failures
+      const isRetryable =
+        e.message === 'timeout' ||
+        e.message === 'Failed to fetch' ||
+        e.message?.includes('fetch') ||
+        e.message?.includes('network') ||
+        e.message?.includes('NetworkError')
+      if (!isRetryable) throw e
       retrying.value = true
-      await new Promise(r => setTimeout(r, 3000))
+      // Refresh session before retrying — ensures token is valid after tab was hidden
+      await supabase.auth.getSession().catch(() => {})
+      await new Promise(r => setTimeout(r, 2000))
       try {
         return await fn()
       } finally {
