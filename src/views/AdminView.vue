@@ -1,7 +1,9 @@
 <script setup>
 import { ref, computed, markRaw, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { usePortfolioStore } from '@/stores/portfolio'
 import { useAuthStore } from '@/stores/auth'
+import { getProfession, professions } from '@/lib/professions'
 import LoginPanel from '@/components/admin/LoginPanel.vue'
 import OverviewPanel from '@/components/admin/OverviewPanel.vue'
 import HeroPanel from '@/components/admin/HeroPanel.vue'
@@ -13,18 +15,52 @@ import ThemePanel from '@/components/admin/ThemePanel.vue'
 
 const store = usePortfolioStore()
 const auth = useAuthStore()
+const router = useRouter()
 
 onMounted(async () => {
   await auth.init()
   // Auth is now resolved — fetch portfolio data for the signed-in user.
-  if (auth.user) store.fetchForOwner(auth.user.id)
+  if (auth.user) {
+    await store.fetchForOwner(auth.user.id)
+    // Guard: if profession is not set, send to onboarding
+    if (!store.profession) {
+      router.replace('/onboarding')
+    }
+  }
 })
 
 // Also re-fetch when sign-in happens mid-session (e.g. from LoginPanel).
 watch(
   () => auth.user,
-  (newUser) => { if (newUser) store.fetchForOwner(newUser.id) },
+  async (newUser) => {
+    if (newUser) {
+      await store.fetchForOwner(newUser.id)
+      if (!store.profession) router.replace('/onboarding')
+    }
+  },
 )
+
+// — Change Profession modal —
+const showProfessionModal = ref(false)
+const changingTo = ref(null)
+const changeSaving = ref(false)
+const changeError = ref('')
+
+async function saveProfessionChange() {
+  if (!changingTo.value) return
+  changeSaving.value = true
+  changeError.value = ''
+  try {
+    await store.updateProfession(changingTo.value)
+    showProfessionModal.value = false
+  } catch (e) {
+    changeError.value = e.message || 'Failed to save.'
+  } finally {
+    changeSaving.value = false
+  }
+}
+
+const currentProfession = computed(() => getProfession(store.profession))
 
 const activeTab = ref('overview')
 const sidebarOpen = ref(false)
@@ -136,6 +172,17 @@ function navigate(id) {
             <h1 class="text-white font-bold text-sm">Admin Dashboard</h1>
             <p class="text-gray-500 text-xs">Portfolio Manager</p>
           </div>
+        </div>
+        <!-- Profession badge + change link -->
+        <div v-if="currentProfession" class="mt-3 flex items-center justify-between">
+          <div class="flex items-center gap-1.5">
+            <span class="text-sm leading-none">{{ currentProfession.icon }}</span>
+            <span class="text-xs text-purple-300 font-medium">{{ currentProfession.label }}</span>
+          </div>
+          <button
+            @click="showProfessionModal = true; changingTo = store.profession"
+            class="text-xs text-gray-600 hover:text-purple-400 transition-colors"
+          >Change</button>
         </div>
       </div>
 
@@ -263,4 +310,65 @@ function navigate(id) {
       </div>
     </main>
   </div>
+
+  <!-- Change Profession modal -->
+  <Transition
+    enter-active-class="transition duration-200 ease-out"
+    enter-from-class="opacity-0"
+    enter-to-class="opacity-100"
+    leave-active-class="transition duration-150 ease-in"
+    leave-from-class="opacity-100"
+    leave-to-class="opacity-0"
+  >
+    <div
+      v-if="showProfessionModal"
+      class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center px-4 py-8"
+      @click.self="showProfessionModal = false"
+    >
+      <div class="bg-gray-900 rounded-2xl border border-gray-800 w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
+        <div class="flex items-start justify-between mb-5">
+          <div>
+            <h2 class="text-white font-bold text-lg">Change Profession</h2>
+            <p class="text-gray-500 text-xs mt-1">Changing profession only affects the admin form labels and your portfolio layout — your existing entries are not deleted.</p>
+          </div>
+          <button @click="showProfessionModal = false" class="text-gray-600 hover:text-white text-xl leading-none ml-4">&times;</button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-5">
+          <button
+            v-for="p in professions"
+            :key="p.id"
+            @click="changingTo = p.id"
+            :class="[
+              'text-left rounded-xl border p-4 transition-all',
+              changingTo === p.id
+                ? 'border-purple-500 bg-purple-950/50 ring-1 ring-purple-500'
+                : 'border-gray-800 bg-gray-800/50 hover:border-gray-600',
+            ]"
+          >
+            <div class="text-2xl mb-1.5">{{ p.icon }}</div>
+            <div class="text-white text-sm font-medium">{{ p.label }}</div>
+            <div class="text-gray-500 text-xs mt-0.5">{{ p.description }}</div>
+          </button>
+        </div>
+
+        <p v-if="changeError" class="text-red-400 text-sm mb-3">{{ changeError }}</p>
+
+        <div class="flex gap-3">
+          <button
+            @click="saveProfessionChange"
+            :disabled="changeSaving || changingTo === store.profession"
+            class="px-5 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors"
+          >
+            <span v-if="changeSaving">Saving…</span>
+            <span v-else>Save Change</span>
+          </button>
+          <button
+            @click="showProfessionModal = false"
+            class="px-5 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium rounded-lg transition-colors"
+          >Cancel</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
 </template>

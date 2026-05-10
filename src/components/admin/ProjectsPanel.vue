@@ -1,23 +1,31 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { usePortfolioStore } from '@/stores/portfolio'
+import { getProfession } from '@/lib/professions'
 
 const store = usePortfolioStore()
 
 const showForm = ref(false)
 const editingId = ref(null)
-const techInput = ref('')
 const saveError = ref('')
 
-function emptyForm() {
-  return {
-    title: '',
-    description: '',
-    image: '',
-    live_url: '',
-    github_url: '',
-    tech: [],
+const prof = computed(() => getProfession(store.profession))
+
+// Helper: get the tags field config (if any) for the current profession
+const tagsField = computed(() => prof.value.fields.find((f) => f.type === 'tags') ?? null)
+// Helper: all non-tags fields
+const otherFields = computed(() => prof.value.fields.filter((f) => f.type !== 'tags'))
+
+function emptyDetails() {
+  const d = {}
+  for (const f of prof.value.fields) {
+    d[f.key] = f.type === 'tags' ? '' : ''
   }
+  return d
+}
+
+function emptyForm() {
+  return { title: '', description: '', image: '', details: emptyDetails() }
 }
 
 const form = ref(emptyForm())
@@ -25,15 +33,30 @@ const form = ref(emptyForm())
 function openAdd() {
   editingId.value = null
   form.value = emptyForm()
-  techInput.value = ''
   saveError.value = ''
   showForm.value = true
 }
 
 function openEdit(item) {
   editingId.value = item.id
-  form.value = { ...item, tech: [...(item.tech || [])] }
-  techInput.value = (item.tech || []).join(', ')
+  const details = { ...item.details }
+
+  // Backward compat: developer projects may have tech/live_url/github_url in root columns
+  if (prof.value.id === 'developer') {
+    if (!details.tech && item.tech?.length) details.tech = item.tech.join(', ')
+    else if (Array.isArray(details.tech)) details.tech = details.tech.join(', ')
+    if (details.live_url === undefined) details.live_url = item.live_url ?? ''
+    if (details.github_url === undefined) details.github_url = item.github_url ?? ''
+  } else {
+    // Convert any array values (tags) to comma strings for the input
+    for (const f of prof.value.fields) {
+      if (f.type === 'tags' && Array.isArray(details[f.key])) {
+        details[f.key] = details[f.key].join(', ')
+      }
+    }
+  }
+
+  form.value = { title: item.title, description: item.description, image: item.image ?? '', details }
   saveError.value = ''
   showForm.value = true
 }
@@ -42,18 +65,38 @@ function cancel() {
   showForm.value = false
   editingId.value = null
   form.value = emptyForm()
-  techInput.value = ''
   saveError.value = ''
 }
 
 async function save() {
   if (!form.value.title.trim()) return
   saveError.value = ''
-  const tech = techInput.value
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean)
-  const data = { ...form.value, tech }
+
+  // Build details: convert tags fields from comma-strings → arrays
+  const details = { ...form.value.details }
+  for (const f of prof.value.fields) {
+    if (f.type === 'tags') {
+      const raw = details[f.key] || ''
+      details[f.key] = typeof raw === 'string'
+        ? raw.split(',').map((t) => t.trim()).filter(Boolean)
+        : (raw ?? [])
+    }
+  }
+
+  // Legacy columns kept for backward compat (developer) and empty for others
+  const tech = prof.value.id === 'developer' ? (details.tech ?? []) : []
+  const live_url = details.live_url ?? ''
+  const github_url = details.github_url ?? ''
+
+  const data = {
+    title: form.value.title,
+    description: form.value.description,
+    image: prof.value.showImage ? (form.value.image ?? '') : '',
+    tech,
+    live_url,
+    github_url,
+    details,
+  }
 
   try {
     if (editingId.value) {
@@ -70,12 +113,23 @@ async function save() {
 }
 
 async function remove(id) {
-  if (!confirm('Delete this project?')) return
+  if (!confirm(`Delete this ${prof.value.projectLabel.toLowerCase()}?`)) return
   try {
     await store.deleteProject(id)
   } catch (e) {
     alert('Delete failed: ' + (e.message === 'timeout' ? 'Database is waking up — please try again.' : e.message))
   }
+}
+
+// Tags displayed in the project list card
+function listTags(project) {
+  // For developer backward compat: check details first, then root tech column
+  if (tagsField.value) {
+    const fromDetails = project.details?.[tagsField.value.key]
+    if (Array.isArray(fromDetails) && fromDetails.length) return fromDetails
+    if (prof.value.id === 'developer' && project.tech?.length) return project.tech
+  }
+  return []
 }
 </script>
 
@@ -84,7 +138,7 @@ async function remove(id) {
     <!-- Header -->
     <div class="flex items-center justify-between">
       <p class="text-sm text-gray-500">
-        {{ store.projects.length }} project{{ store.projects.length !== 1 ? 's' : '' }}
+        {{ store.projects.length }} {{ store.projects.length !== 1 ? prof.projectLabelPlural : prof.projectLabel }}
       </p>
       <button
         @click="openAdd"
@@ -93,7 +147,7 @@ async function remove(id) {
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
         </svg>
-        Add Project
+        Add {{ prof.projectLabel }}
       </button>
     </div>
 
@@ -104,45 +158,63 @@ async function remove(id) {
       enter-to-class="opacity-100 translate-y-0"
     >
       <div v-if="showForm" class="bg-white rounded-xl border border-indigo-200 p-6 shadow-sm space-y-4">
-        <h3 class="font-semibold text-gray-800">
-          {{ editingId ? 'Edit Project' : 'New Project' }}
+        <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+          <span>{{ editingId ? 'Edit' : 'New' }} {{ prof.projectLabel }}</span>
+          <span class="text-base leading-none">{{ prof.icon }}</span>
         </h3>
 
+        <!-- Title -->
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Project Title <span class="text-red-400">*</span></label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Title <span class="text-red-400">*</span></label>
           <input
             v-model="form.title"
             type="text"
-            placeholder="e.g. E-Commerce Platform"
+            :placeholder="`e.g. ${prof.id === 'accountant' ? 'Annual Audit for ABC Corp' : prof.id === 'nurse' ? 'ICU Patient Care Experience' : prof.id === 'teacher' ? 'Algebra Fundamentals Module' : 'My Best Work'}`"
             class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
           />
         </div>
 
+        <!-- Description -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
           <textarea
             v-model="form.description"
             rows="3"
-            placeholder="Describe what this project does, its purpose, and impact..."
+            placeholder="Describe the work, its purpose, and impact..."
             class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent resize-none"
           ></textarea>
         </div>
 
-        <div>
+        <!-- Profession-specific text fields -->
+        <div
+          v-for="f in otherFields.filter(f => f.type === 'text')"
+          :key="f.key"
+        >
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ f.label }}</label>
+          <input
+            v-model="form.details[f.key]"
+            type="text"
+            :placeholder="f.placeholder"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+          />
+        </div>
+
+        <!-- Tags field (tech stack / tools / services / channels / skills) -->
+        <div v-if="tagsField">
           <label class="block text-sm font-medium text-gray-700 mb-1">
-            Tech Stack
+            {{ tagsField.label }}
             <span class="font-normal text-gray-400">(comma-separated)</span>
           </label>
           <input
-            v-model="techInput"
+            v-model="form.details[tagsField.key]"
             type="text"
-            placeholder="Vue.js, Node.js, PostgreSQL, Tailwind CSS"
+            :placeholder="tagsField.placeholder"
             class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
           />
           <!-- Tag preview -->
-          <div v-if="techInput.trim()" class="flex flex-wrap gap-1.5 mt-2">
+          <div v-if="form.details[tagsField.key]?.trim()" class="flex flex-wrap gap-1.5 mt-2">
             <span
-              v-for="tag in techInput.split(',').map(t => t.trim()).filter(Boolean)"
+              v-for="tag in (form.details[tagsField.key] || '').split(',').map(t => t.trim()).filter(Boolean)"
               :key="tag"
               class="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full"
             >
@@ -151,7 +223,22 @@ async function remove(id) {
           </div>
         </div>
 
-        <div>
+        <!-- URL fields -->
+        <div
+          v-for="f in otherFields.filter(f => f.type === 'url')"
+          :key="f.key"
+        >
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ f.label }}</label>
+          <input
+            v-model="form.details[f.key]"
+            type="url"
+            :placeholder="f.placeholder"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+          />
+        </div>
+
+        <!-- Image (only for developer / designer) -->
+        <div v-if="prof.showImage">
           <label class="block text-sm font-medium text-gray-700 mb-1">Preview Image URL</label>
           <input
             v-model="form.image"
@@ -168,27 +255,7 @@ async function remove(id) {
           />
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Live Demo URL</label>
-            <input
-              v-model="form.live_url"
-              type="url"
-              placeholder="https://yourproject.com"
-              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">GitHub URL</label>
-            <input
-              v-model="form.github_url"
-              type="url"
-              placeholder="https://github.com/you/repo"
-              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
-            />
-          </div>
-        </div>
-
+        <!-- Actions -->
         <div class="flex items-center gap-3 pt-1">
           <button
             @click="save"
@@ -213,8 +280,8 @@ async function remove(id) {
       v-if="!store.projects.length"
       class="bg-white rounded-xl border border-dashed border-gray-300 p-12 text-center"
     >
-      <div class="text-4xl mb-3 opacity-40">💻</div>
-      <p class="text-gray-500 text-sm">No projects yet. Click "Add Project" to get started.</p>
+      <div class="text-4xl mb-3 opacity-40">{{ prof.placeholderIcon }}</div>
+      <p class="text-gray-500 text-sm">No {{ prof.projectLabelPlural.toLowerCase() }} yet. Click "Add {{ prof.projectLabel }}" to get started.</p>
     </div>
 
     <!-- List -->
@@ -224,16 +291,20 @@ async function remove(id) {
         :key="project.id"
         class="bg-white rounded-xl border border-gray-200 p-4 flex gap-4 items-start hover:border-indigo-200 transition-colors"
       >
-        <!-- Thumb -->
-        <div class="shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-gray-100">
+        <!-- Thumb (only for dev/designer) -->
+        <div v-if="prof.showImage" class="shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-gray-100">
           <img
             v-if="project.image"
             :src="project.image"
             :alt="project.title"
             class="w-full h-full object-cover"
-            @error="(e) => e.target.parentElement.innerHTML = '<div class=\'flex items-center justify-center h-full text-2xl\'>💻</div>'"
+            @error="(e) => e.target.parentElement.innerHTML = `<div class='flex items-center justify-center h-full text-2xl'>${prof.placeholderIcon}</div>`"
           />
-          <div v-else class="w-full h-full flex items-center justify-center text-2xl">💻</div>
+          <div v-else class="w-full h-full flex items-center justify-center text-2xl">{{ prof.placeholderIcon }}</div>
+        </div>
+        <!-- Non-image professions: small icon badge -->
+        <div v-else class="shrink-0 w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-xl">
+          {{ prof.placeholderIcon }}
         </div>
 
         <!-- Info -->
@@ -244,20 +315,17 @@ async function remove(id) {
               <p v-if="project.description" class="text-sm text-gray-500 mt-0.5 line-clamp-1">
                 {{ project.description }}
               </p>
-              <!-- Tech tags -->
-              <div v-if="project.tech?.length" class="flex flex-wrap gap-1 mt-1.5">
+              <!-- Tags pills from details (or legacy tech column for dev) -->
+              <div v-if="listTags(project).length" class="flex flex-wrap gap-1 mt-1.5">
                 <span
-                  v-for="tag in project.tech.slice(0, 4)"
+                  v-for="tag in listTags(project).slice(0, 4)"
                   :key="tag"
                   class="text-xs bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-0.5 rounded-full"
                 >
                   {{ tag }}
                 </span>
-                <span
-                  v-if="project.tech.length > 4"
-                  class="text-xs text-gray-400"
-                >
-                  +{{ project.tech.length - 4 }} more
+                <span v-if="listTags(project).length > 4" class="text-xs text-gray-400">
+                  +{{ listTags(project).length - 4 }} more
                 </span>
               </div>
             </div>

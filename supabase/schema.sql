@@ -30,11 +30,14 @@ create table if not exists public.portfolio_data (
   hero        jsonb not null default '{}'::jsonb,
   social      jsonb not null default '{}'::jsonb,
   theme       text not null default 'dark',
+  profession  text not null default 'developer',
   updated_at  timestamptz not null default now()
 );
 
 -- Phase 2 migration (run separately if table already exists):
 -- ALTER TABLE public.portfolio_data ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'dark';
+-- Phase 3 migration — multi-profession support (run separately if table already exists):
+-- ALTER TABLE public.portfolio_data ADD COLUMN IF NOT EXISTS profession TEXT NOT NULL DEFAULT 'developer';
 
 alter table public.portfolio_data enable row level security;
 
@@ -77,9 +80,13 @@ create table if not exists public.projects (
   live_url    text not null default '',
   github_url  text not null default '',
   tech        text[] not null default '{}',
+  details     jsonb not null default '{}'::jsonb,
   sort_order  int  not null default 0,
   created_at  timestamptz not null default now()
 );
+
+-- Phase 3 migration — multi-profession support (run separately if table already exists):
+-- ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS details JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 alter table public.projects enable row level security;
 

@@ -27,18 +27,20 @@ function withTimeout(fn, ms = 25000) {
 }
 
 // Select-then-insert-or-update avoids the upsert RLS deadlock on Supabase free tier.
-async function savePortfolioData(userId, hero, social, theme) {
+async function savePortfolioData(userId, hero, social, theme, professionVal) {
   const { data: existing } = await withTimeout(() =>
     supabase.from('portfolio_data').select('id').eq('user_id', userId).maybeSingle()
   )
+  const payload = { hero, social, theme }
+  if (professionVal !== undefined) payload.profession = professionVal
   if (existing) {
     const { error } = await withTimeout(() =>
-      supabase.from('portfolio_data').update({ hero, social, theme }).eq('user_id', userId)
+      supabase.from('portfolio_data').update(payload).eq('user_id', userId)
     )
     if (error) throw new Error(error.message)
   } else {
     const { error } = await withTimeout(() =>
-      supabase.from('portfolio_data').insert({ user_id: userId, hero, social, theme })
+      supabase.from('portfolio_data').insert({ user_id: userId, ...payload })
     )
     if (error) throw new Error(error.message)
   }
@@ -50,6 +52,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
   const projects = ref([])
   const social = ref({ ...defaultSocial })
   const theme = ref('dark')
+  const profession = ref(null)   // null = not yet set → triggers onboarding
   const inquiries = ref([])
   const loading = ref(false)
   const notFound = ref(false)
@@ -81,7 +84,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     ownerId.value = userId
 
     const [pdRes, achRes, projRes, inqRes] = await Promise.all([
-      supabase.from('portfolio_data').select('hero, social, theme').eq('user_id', userId).maybeSingle(),
+      supabase.from('portfolio_data').select('hero, social, theme, profession').eq('user_id', userId).maybeSingle(),
       supabase.from('achievements').select('*').eq('user_id', userId).order('sort_order'),
       supabase.from('projects').select('*').eq('user_id', userId).order('sort_order'),
       supabase
@@ -94,6 +97,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     hero.value = pdRes.data?.hero ?? { ...defaultHero }
     social.value = pdRes.data?.social ?? { ...defaultSocial }
     theme.value = pdRes.data?.theme ?? 'dark'
+    profession.value = pdRes.data?.profession ?? null
     achievements.value = (achRes.data ?? []).map((r) => ({
       id: r.id,
       title: r.title,
@@ -110,6 +114,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
       live_url: r.live_url,
       github_url: r.github_url,
       tech: r.tech ?? [],
+      details: r.details ?? {},
       sort_order: r.sort_order,
     }))
     inquiries.value = (inqRes.data ?? []).map((r) => ({
@@ -145,7 +150,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     ownerId.value = profile.id
 
     const [pdRes, achRes, projRes] = await Promise.all([
-      supabase.from('portfolio_data').select('hero, social, theme').eq('user_id', profile.id).maybeSingle(),
+      supabase.from('portfolio_data').select('hero, social, theme, profession').eq('user_id', profile.id).maybeSingle(),
       supabase.from('achievements').select('*').eq('user_id', profile.id).order('sort_order'),
       supabase.from('projects').select('*').eq('user_id', profile.id).order('sort_order'),
     ])
@@ -153,6 +158,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     hero.value = pdRes.data?.hero ?? { ...defaultHero }
     social.value = pdRes.data?.social ?? { ...defaultSocial }
     theme.value = pdRes.data?.theme ?? 'dark'
+    profession.value = pdRes.data?.profession ?? 'developer'
     achievements.value = (achRes.data ?? []).map((r) => ({
       id: r.id,
       title: r.title,
@@ -169,6 +175,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
       live_url: r.live_url,
       github_url: r.github_url,
       tech: r.tech ?? [],
+      details: r.details ?? {},
       sort_order: r.sort_order,
     }))
     inquiries.value = []
@@ -208,6 +215,29 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     if (error) throw new Error(error.message)
     const { data } = supabase.storage.from('avatars').getPublicUrl(path)
     return data.publicUrl
+  }
+
+  // ── Profession ────────────────────────────────────────
+  async function updateProfession(name) {
+    if (!ownerId.value) throw new Error('Not ready yet — please wait a moment and try again.')
+    profession.value = name
+    const { data: existing } = await withTimeout(() =>
+      supabase.from('portfolio_data').select('id').eq('user_id', ownerId.value).maybeSingle()
+    )
+    if (existing) {
+      const { error } = await withTimeout(() =>
+        supabase.from('portfolio_data').update({ profession: name }).eq('user_id', ownerId.value)
+      )
+      if (error) throw new Error(error.message)
+    } else {
+      const { error } = await withTimeout(() =>
+        supabase.from('portfolio_data').insert({
+          user_id: ownerId.value, hero: hero.value, social: social.value,
+          theme: theme.value, profession: name,
+        })
+      )
+      if (error) throw new Error(error.message)
+    }
   }
 
   // ── Theme ─────────────────────────────────────────────
@@ -281,10 +311,10 @@ export const usePortfolioStore = defineStore('portfolio', () => {
         supabase
           .from('projects')
           .insert({
-            title: item.title, description: item.description, image: item.image,
+            title: item.title, description: item.description, image: item.image ?? '',
             live_url: item.live_url ?? '', github_url: item.github_url ?? '',
-            tech: item.tech ?? [], user_id: ownerId.value,
-            sort_order: projects.value.length,
+            tech: item.tech ?? [], details: item.details ?? {},
+            user_id: ownerId.value, sort_order: projects.value.length,
           })
           .select()
           .single()
@@ -295,14 +325,15 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     projects.value.push({
       id: result.id, title: result.title, description: result.description, image: result.image,
       live_url: result.live_url, github_url: result.github_url,
-      tech: result.tech ?? [], sort_order: result.sort_order,
+      tech: result.tech ?? [], details: result.details ?? {}, sort_order: result.sort_order,
     })
   }
 
   async function updateProject(id, data) {
     const payload = {
-      title: data.title, description: data.description, image: data.image,
-      live_url: data.live_url ?? '', github_url: data.github_url ?? '', tech: data.tech ?? [],
+      title: data.title, description: data.description, image: data.image ?? '',
+      live_url: data.live_url ?? '', github_url: data.github_url ?? '',
+      tech: data.tech ?? [], details: data.details ?? {},
     }
     await withRetry(async () => {
       const { error } = await withTimeout(() =>
@@ -370,6 +401,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     projects,
     social,
     theme,
+    profession,
     inquiries,
     loading,
     notFound,
@@ -380,6 +412,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     updateHero,
     uploadAvatar,
     uploadImage,
+    updateProfession,
     updateTheme,
     addAchievement,
     updateAchievement,

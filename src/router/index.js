@@ -6,6 +6,7 @@ import AuthCallbackView from '@/views/AuthCallbackView.vue'
 import SetPasswordView from '@/views/SetPasswordView.vue'
 import ForgotPasswordView from '@/views/ForgotPasswordView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
+import OnboardingView from '@/views/OnboardingView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -24,6 +25,11 @@ const router = createRouter({
       path: '/auth/callback',
       name: 'auth-callback',
       component: AuthCallbackView,
+    },
+    {
+      path: '/onboarding',
+      name: 'onboarding',
+      component: OnboardingView,
     },
     {
       path: '/set-password',

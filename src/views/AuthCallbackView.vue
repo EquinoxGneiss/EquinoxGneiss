@@ -55,6 +55,16 @@ onMounted(async () => {
         router.replace('/set-password')
         return
       }
+      // Check if user has chosen a profession — if not, send to onboarding
+      const { data: pd } = await supabase
+        .from('portfolio_data')
+        .select('profession')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (!pd?.profession) {
+        router.replace('/onboarding')
+        return
+      }
     }
     router.replace('/admin')
   }
